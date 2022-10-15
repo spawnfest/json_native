@@ -1,8 +1,12 @@
 #include <vector>
 #include <string_view>
 #include <limits>
+#include <cstring>
 
 #include "erl_nif.h"
+
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 template <class T>
 struct enif_allocator
@@ -183,7 +187,7 @@ ERL_NIF_TERM escape_json(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
 
     for (; skipped < data.size(); skipped++) {
-        if (reds-- == 0) [[unlikely]] {
+        if (unlikely(reds-- == 0)) {
             if (enif_consume_timeslice(env, CHECKIN_PROGRESS)) {
                 ERL_NIF_TERM skipped_term = enif_make_ulong(env, skipped);
 
@@ -226,7 +230,7 @@ main_loop:
 
     reds *= LOOP_REDS_FACTOR;
     for (; i < data.size(); i++) {
-        if (reds-- == 0) [[unlikely]] {
+        if (unlikely(reds-- == 0)) {
             if (enif_consume_timeslice(env, CHECKIN_PROGRESS)) {
                 ERL_NIF_TERM i_term = enif_make_ulong(env, i);
                 ERL_NIF_TERM start_term = enif_make_ulong(env, start);
