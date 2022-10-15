@@ -1,9 +1,34 @@
-#include <algorithm>
 #include <vector>
 #include <string_view>
-#include <iostream>
+#include <limits>
 
 #include "erl_nif.h"
+
+template <class T>
+struct enif_allocator
+{
+    typedef T value_type;
+
+    enif_allocator() = default;
+    template <class U> constexpr enif_allocator(const enif_allocator <U>&) noexcept {}
+
+    [[nodiscard]] T* allocate(std::size_t n) {
+        if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
+            return nullptr;
+        }
+
+        if (auto p = static_cast<T*>(enif_alloc(n * sizeof(T)))) {
+            return p;
+        }
+
+        return nullptr;
+    }
+
+    void deallocate(T* p, std::size_t n) noexcept {
+        (void)n;
+        enif_free(p);
+    }
+};
 
 const char8_t BB = 'b';  // \x08
 const char8_t TT = 't';  // \x09
@@ -104,7 +129,7 @@ private:
     ErlNifEnv* _env;
     ErlNifBinary _current;
     size_t _current_written;
-    std::vector<ERL_NIF_TERM> _acc;
+    std::vector<ERL_NIF_TERM, enif_allocator<ERL_NIF_TERM>> _acc;
 };
 
 ERL_NIF_TERM escape_json(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
