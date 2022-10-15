@@ -24,3 +24,6 @@ jason_native-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Ignore natively-compiled stuff
+/priv/
