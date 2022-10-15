@@ -23,7 +23,8 @@ defmodule JasonNative.MixProject do
     [
       {:elixir_make, "~> 0.6", runtime: false},
       {:jason, "~> 1.0", only: :test},
-      {:stream_data, "~> 0.5", only: :test}
+      {:stream_data, "~> 0.5", only: :test},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false}
     ]
   end
 end
