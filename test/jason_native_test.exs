@@ -5,12 +5,21 @@ defmodule Jason.NativeTest do
   import Jason.Native
 
   test "greets the world" do
-    assert escape_json("hello world") == ~s(hello world)
-    assert escape_json("hello\nworld") == ~s(hello\\nworld)
-    assert escape_json("\nhello\nworld\n") == ~s(\\nhello\\nworld\\n)
+    assert escape_json("hello world") == ~S(hello world)
+    assert escape_json("hello\nworld") == ~S(hello\nworld)
+    assert escape_json("\nhello\nworld\n") == ~S(\nhello\nworld\n)
 
-    assert escape_json("\"") == ~s(\\")
-    assert escape_json("\0") == ~s(\\u0000)
-    assert escape_json(<<31>>) == ~s(\\u001F)
+    assert escape_json("\"") == ~S(\")
+    assert escape_json("\0") == ~S(\u0000)
+    assert escape_json(<<31>>) == ~S(\u001F)
+
+    assert escape_json("\0\0\0\0\0\0") == ~S(\u0000\u0000\u0000\u0000\u0000\u0000)
+
+    long_text = String.duplicate("a", 64 * 2)
+
+    assert escape_json(long_text <> "\0\0\0\0\0\0") == [
+             long_text <> ~S(\u0000\u0000),
+             ~S(\u0000\u0000\u0000\u0000)
+           ]
   end
 end
