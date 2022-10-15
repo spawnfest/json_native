@@ -89,7 +89,7 @@ public:
                 ERL_NIF_TERM bin = this->make_binary();
                 _acc.push_back(bin);
             }
-            size_t needed = std::max(left + remaining_hint * ESTIMATE_GROWTH, MIN_CHUNK);
+            size_t needed = std::max((left + remaining_hint) * ESTIMATE_GROWTH, MIN_CHUNK);
             if (!enif_alloc_binary(needed, &_current)) {
                 return false;
             }
