@@ -1,5 +1,7 @@
 defmodule Jason.NativeTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
+  use ExUnitProperties
+
   doctest Jason.Native
 
   import Jason.Native
@@ -21,5 +23,17 @@ defmodule Jason.NativeTest do
              long_text <> ~S(\u0000\u0000),
              ~S(\u0000\u0000\u0000\u0000)
            ]
+  end
+
+  property "escape_json/1" do
+    check all(string <- string(:printable)) do
+      escaped = IO.iodata_to_binary(escape_json(string))
+
+      for <<(<<byte>> <- escaped)>> do
+        assert byte < 0xF1 or byte not in [?", ?\\]
+      end
+
+      assert Jason.decode!([?", escaped, ?"]) == string
+    end
   end
 end

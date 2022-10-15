@@ -21,7 +21,9 @@ defmodule JasonNative.MixProject do
 
   defp deps do
     [
-      {:elixir_make, "~> 0.4", runtime: false}
+      {:elixir_make, "~> 0.6", runtime: false},
+      {:jason, "~> 1.0", only: :test},
+      {:stream_data, "~> 0.5", only: :test}
     ]
   end
 end
