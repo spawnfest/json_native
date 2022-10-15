@@ -24,7 +24,7 @@ BUILD  = $(MIX_APP_PATH)/obj
 
 NIF = $(PREFIX)/libjason.so
 
-CXXFLAGS ?= -O2 -Wall -Wextra -pedantic -std=c++20
+CXXFLAGS ?= -O2 -Wall -Wextra -pedantic -std=c++20 -fno-exceptions
 
 # Check that we're on a supported build platform
 ifeq ($(CROSSCOMPILE),)
