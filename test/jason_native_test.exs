@@ -23,6 +23,9 @@ defmodule Jason.NativeTest do
              long_text <> ~S(\u0000\u0000),
              ~S(\u0000\u0000\u0000\u0000)
            ]
+
+    # Force to go into main loop early
+    assert escape_json("\0" <> long_text) == ~S(\u0000) <> long_text
   end
 
   property "escape_json/1" do

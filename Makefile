@@ -41,6 +41,10 @@ LDFLAGS += -fPIC -shared
 CXXFLAGS += -fPIC
 endif
 
+ifeq ($(MIX_ENV),test)
+    CXXFLAGS += -DMIX_TEST
+endif
+
 # Set Erlang-specific compile and linker flags
 ERL_CXXFLAGS ?= -I$(ERL_EI_INCLUDE_DIR)
 ERL_LDFLAGS ?= -L$(ERL_EI_LIBDIR) -lei

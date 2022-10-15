@@ -79,6 +79,10 @@ public:
         }
     }
 
+    void restore(ERL_NIF_TERM term) {
+        _acc.push_back(term);
+    }
+
     bool write(std::u8string_view span, size_t remaining_hint) {
         size_t to_write = std::min(_current.size - _current_written, span.size());
         this->write_current(span.data(), to_write);
@@ -132,8 +136,23 @@ private:
     std::vector<ERL_NIF_TERM, enif_allocator<ERL_NIF_TERM>> _acc;
 };
 
+// How many times per schedule to call consume_percentage
+const int CHECKIN_FREQUENCY = 4;
+const int CHECKIN_PROGRESS = 100 / CHECKIN_FREQUENCY;
+#ifdef MIX_TEST
+// Force more freuqent yielding when testing
+const int REDS = 16;
+#else
+// Mirrors Erlang's default reductions per schedule (4000) as power of two
+const int REDS = 4096;
+#endif
+const int DEFAULT_REDS = REDS / CHECKIN_FREQUENCY;
+// Bytes per single reduction - power of 2 for fast division
+const int SKIP_REDS_FACTOR = 64;
+const int LOOP_REDS_FACTOR = 32;
+
 ERL_NIF_TERM escape_json(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-    if (argc != 1) {
+    if (argc < 1) {
         return enif_make_badarg(env);
     }
 
@@ -144,26 +163,87 @@ ERL_NIF_TERM escape_json(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
     std::u8string_view data(reinterpret_cast<char8_t*>(raw_data.data), raw_data.size);
 
+    int reds = DEFAULT_REDS;
+
+    reds *= SKIP_REDS_FACTOR;
+
     size_t skipped = 0;
+    if (argc == 1) {
+        // Nothing, plain call
+    } else if (argc == 2) {
+        // Restore, if we yielded during skipping
+        if (!enif_get_ulong(env, argv[1], &skipped)) {
+            return enif_make_badarg(env);
+        }
+    } else if (argc == 4) {
+        // Restore if we yielded during main loop
+        goto main_loop;
+    } else {
+        return enif_make_badarg(env);
+    }
+
     for (; skipped < data.size(); skipped++) {
+        if (reds-- == 0) [[unlikely]] {
+            if (enif_consume_timeslice(env, CHECKIN_PROGRESS)) {
+                ERL_NIF_TERM skipped_term = enif_make_ulong(env, skipped);
+
+                const ERL_NIF_TERM new_argv[2] = { original, skipped_term };
+                return enif_schedule_nif(env, "escape_json", 0, escape_json, 2, new_argv);
+            } else {
+                reds = DEFAULT_REDS * SKIP_REDS_FACTOR;
+            }
+        }
+
         char8_t byte = data[skipped];
         if (ESCAPE[byte] != __) {
             break;
         }
     }
 
+    reds /= SKIP_REDS_FACTOR;
+
     // No escaping is necessary
     if (skipped == data.size()) {
+        enif_consume_timeslice(env, (DEFAULT_REDS - reds) * CHECKIN_PROGRESS / DEFAULT_REDS);
         return original;
     }
 
-    IoListBuffer buffer(env);
+main_loop:
+    IoListBuffer buffer = IoListBuffer(env);
     size_t start = 0;
+    size_t i = skipped;
 
-    for (size_t i = skipped; i < data.size(); i++) {
+    if (argc == 4) {
+        // Restore, if we yielded during main loop
+        if (!enif_get_ulong(env, argv[1], &i)) {
+            return enif_make_badarg(env);
+        }
+        if (!enif_get_ulong(env, argv[2], &start)) {
+            return enif_make_badarg(env);
+        }
+        buffer.restore(argv[3]);
+    }
+
+    reds *= LOOP_REDS_FACTOR;
+    for (; i < data.size(); i++) {
+        if (reds-- == 0) [[unlikely]] {
+            if (enif_consume_timeslice(env, CHECKIN_PROGRESS)) {
+                ERL_NIF_TERM i_term = enif_make_ulong(env, i);
+                ERL_NIF_TERM start_term = enif_make_ulong(env, start);
+                ERL_NIF_TERM buffer_term = buffer.finish();
+                if (enif_is_exception(env, buffer_term)) {
+                    return buffer_term;
+                }
+
+                const ERL_NIF_TERM new_argv[4] = { original, i_term, start_term, buffer_term };
+                return enif_schedule_nif(env, "escape_json", 0, escape_json, 4, new_argv);
+            } else {
+                reds = DEFAULT_REDS * LOOP_REDS_FACTOR;
+            }
+        }
+
         char8_t byte = data[i];
         char8_t escape = ESCAPE[byte];
-
         if (escape == __) {
             continue;
         }
@@ -190,6 +270,7 @@ ERL_NIF_TERM escape_json(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
         start = i + 1;
     }
+    reds /= LOOP_REDS_FACTOR;
 
     if (start != data.size()) {
         if (!buffer.write(data.substr(start), 0)) {
@@ -197,6 +278,7 @@ ERL_NIF_TERM escape_json(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
         }
     }
 
+    enif_consume_timeslice(env, (DEFAULT_REDS - reds) * CHECKIN_PROGRESS / DEFAULT_REDS);
     return buffer.finish();
 }
 
