@@ -7,6 +7,8 @@ defmodule Jason.Native do
 
   @on_load :on_load
 
+  # Elixir doesn't support the `-nifs` attribute natively yet.
+  # Fix it manually
   Module.register_attribute(__MODULE__, :nifs, persist: true)
   @nifs [escape_json: 1]
 
