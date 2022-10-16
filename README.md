@@ -77,6 +77,15 @@ bigger performance improvements could be achieved.
 Furthermore, I believe some "to string" routines inside of the BEAM could be considerably
 improved, in particular: `integer_to_binary` and `<<_::utf8>>` binary patterns.
 
+## FAQ
+
+### Why not Rust?
+
+I'd love to write this in Rust, rather than C++ and [`rustler`](https://github.com/rusterlium/rustler)
+is an awesome project. In fact, I started with a Rust implementation. Unfortunately,
+`rustler` doesn't support `enif_schedule_nif` API, which is crucial for implementing
+well-behaved CPU-intensive yielding NIFs. Therefore, C++ it is.
+
 ## License
 
 Jason.Native is part of Jason and is released under the Apache License 2.0 - see the [LICENSE](LICENSE) file.
