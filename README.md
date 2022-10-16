@@ -32,6 +32,10 @@ for optimising Elixir & Erlang libraries. By providing 2 identical implementatio
 Elixir-based and NIF-based, with an easy & transparent way to switch, projects
 can achieve both - stability & great performance.
 
+To make this work, only a tiny patch to the `Jason` library was required. You
+can find it [here](https://github.com/michalmuskala/jason/commit/400418d3bd38ff63dbcbe81716cd65ac516b1370),
+and it's part of the 1.5.0-alpha.1 release.
+
 ## Installation
 
 The package can be installed by adding `jason_native`, alongside `jason`
