@@ -5,7 +5,23 @@ the blazing fast JSON encoder for Elixir.
 
 This package adds a "sprinke of NIFs" to Jason to make it even faster. All you need
 to do, is just add `jason_native` as a dependency to your project, and that's it!
-No code changes required, things just will be faster.
+**No code changes are required, things just will be faster.**
+
+This is achieved by making `jason_native` an optional dependency of `jason`, and
+switching implementations at compile-time based on the presence (or absence)
+of this optional library.
+
+NIFs are implemented respecting all constraints of the BEAM, including periodic
+yielding to allow scheduler threads to re-schedule processes.
+
+Currently, `Jason.Native` only adds native routines for encoding strings - one of the
+most expensive routnes in encoding JSON.
+In microbenchmarks, this speeds up `Jason.encode!` about 1.5 times for most inputs,
+and places it **between 30% slower and 40% faster compared to [`jiffy`](https://github.com/davisp/jiffy)**,
+which is fully implemented in C.
+For some specific inputs - e.g. large amounts of Unicode or extremely long strings,
+`Jason.Native` is significantly faster -
+**up to 8x faster than regular pure-Elixir `Jason` and 6x faster than pure-C `jiffy`**.
 
 ## Installation
 
@@ -15,15 +31,19 @@ to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:jason, "~> 1.4"},
+    {:jason, "~> 1.5.0-alpha.1"},
     {:jason_native, "~> 0.1.0"}
   ]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/jason_native>.
+Other than Elixir 1.14 and compatible Erlang, this package requires:
+* `make`
+* A C++20-compatible C++ compiler, e.g. `clang` or `gcc`.
+
+Please refer to `Makefile` to supported options for native compilation.
+
+Full documentation can be found at [https://hexdocs.pm/jason_native](https://hexdocs.pm/jason_native).
 
 ## Disclaimer
 
@@ -31,3 +51,18 @@ This package uses NIFs - native functions implemented in C++. I made all efforts
 implement things correctly and test them, but native code is tricky.
 This **can cause instability** in your systems, please test before deploying in production
 to your entire fleet of machines.
+
+## Benchmarks
+
+Benchmarks can be found in the main `Jason` library. Please refer to instructions included
+[there](https://github.com/michalmuskala/jason#benchmarks).
+
+Basic results from my machine can be found in [this gist](https://gist.github.com/michalmuskala/814c2fb9dcb3337c6de8ec24a7dad744).
+
+## License
+
+Jason.Native is part of Jason and is released under the Apache License 2.0 - see the [LICENSE](LICENSE) file.
+
+Jason.Native contains unicode-encoding routines with
+Copyright (c) 2008-2009 Bjoern Hoehrmann <bjoern@hoehrmann.de>
+under the MIT license, see http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
