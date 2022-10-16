@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "erl_nif.h"
+#include "unicode.hh"
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -42,6 +43,7 @@ const char8_t RR = 'r';  // \x0D
 const char8_t QU = '"';  // \x22
 const char8_t BS = '\\'; // \x5C
 const char8_t UU = 'u';  // \x00...\x1F except the ones above
+const char8_t VV = 'v';  // validate \x80..\xFF
 const char8_t __ = 0;
 
 // Lookup table of escape sequences. A value of 'x' at index i means that byte
@@ -56,14 +58,14 @@ const char8_t ESCAPE[256] = {
     __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // 8
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // 9
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // A
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // B
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // C
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // D
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // E
+    VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, VV, // F
 };
 
 
@@ -230,7 +232,7 @@ main_loop:
 
     reds *= LOOP_REDS_FACTOR;
     for (; i < data.size(); i++) {
-        if (unlikely(reds-- == 0)) {
+        if (unlikely(reds-- <= 0)) {
             if (enif_consume_timeslice(env, CHECKIN_PROGRESS)) {
                 ERL_NIF_TERM i_term = enif_make_ulong(env, i);
                 ERL_NIF_TERM start_term = enif_make_ulong(env, start);
@@ -250,6 +252,33 @@ main_loop:
         char8_t escape = ESCAPE[byte];
         if (escape == __) {
             continue;
+        } else if (escape == VV) {
+            uint32_t codepoint;
+            uint32_t state = 0;
+
+            for (; i < data.size(); i++) {
+                char8_t byte = data[i];
+                // We delay yielding for couple bytes for simplicity,
+                // this isn't a big issue since a UTF8 char has at most 4 bytes
+                reds--;
+                switch (utf8_decode(&state, &codepoint, byte)) {
+                case UTF8_ACCEPT:
+                    goto cont;
+                case UTF8_REJECT:
+                    goto reject;
+                default:
+                    break;
+                }
+            }
+        reject:
+            {
+                ERL_NIF_TERM tag = enif_make_atom(env, "invalid_byte");
+                ERL_NIF_TERM byte_term = enif_make_uint(env, byte);
+                ERL_NIF_TERM reason = enif_make_tuple3(env, tag, byte_term, original);
+                return enif_raise_exception(env, reason);
+            }
+        cont:
+            continue;
         }
 
         if (start < i) {
@@ -259,16 +288,15 @@ main_loop:
             }
         }
 
-        char8_t escaped[] = { '\\', escape };
-        std::u8string_view span(escaped, 2);
-        // overallocate for the hex escape sequence
-        buffer.write(span, data.size() - i + 4);
-
-        if (escape == 'u') {
+        if (escape == UU) {
             const char8_t HEX_DIGITS[17] = u8"0123456789ABCDEF";
 
-            char8_t escaped[] = { '0', '0', HEX_DIGITS[byte >> 4], HEX_DIGITS[byte & 0xF] };
-            std::u8string_view span(escaped, 4);
+            char8_t escaped[] = { '\\', 'u', '0', '0', HEX_DIGITS[byte >> 4], HEX_DIGITS[byte & 0xF] };
+            std::u8string_view span(escaped, 6);
+            buffer.write(span, data.size() - i);
+        } else {
+            char8_t escaped[] = { '\\', escape };
+            std::u8string_view span(escaped, 2);
             buffer.write(span, data.size() - i);
         }
 

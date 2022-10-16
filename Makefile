@@ -70,6 +70,8 @@ $(NIF): $(OBJ)
 $(PREFIX) $(BUILD):
 	mkdir -p $@
 
+c_src/jason.cxx: c_src/unicode.hh
+
 clean:
 	$(RM) $(NIF) $(OBJ)
 
